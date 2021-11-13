@@ -9,6 +9,8 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Point.h>
+#include <std_msgs/Float64MultiArray.h>
+#include <std_msgs/Float64.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 #include <quadrotor_msgs/PolynomialTrajectory.h>
@@ -28,7 +30,7 @@ int _dev_order, _min_order;
 
 // ros related
 ros::Subscriber _way_pts_sub;
-ros::Publisher _wp_traj_vis_pub, _wp_path_vis_pub;
+ros::Publisher _wp_traj_vis_pub, _wp_path_vis_pub, _poly_coeff_pub, _time_alloc_pub;
 
 // for planning
 int _poly_num1D;
@@ -59,14 +61,14 @@ void rcvWaypointsCallBack(const nav_msgs::Path & wp)
     {
         Vector3d pt( wp.poses[k].pose.position.x, wp.poses[k].pose.position.y, wp.poses[k].pose.position.z);
         wp_list.push_back(pt);
-        ROS_INFO("waypoint%d: (%f, %f, %f)", k+1, pt(0), pt(1), pt(2));
+        //ROS_INFO("waypoint%d: (%f, %f, %f)", k+1, pt(0), pt(1), pt(2));
     }
 
-    MatrixXd waypoints(wp_list.size() + 1, 3);  //add the original point
-    waypoints.row(0) = _startPos;
+    MatrixXd waypoints(wp_list.size(), 3);  //add the original point
+    //waypoints.row(0) = _startPos;
 
     for(int k = 0; k < (int)wp_list.size(); k++)
-        waypoints.row(k+1) = wp_list[k];
+        waypoints.row(k) = wp_list[k];
 
     //Trajectory generation: use minimum jerk/snap trajectory generation method
     //waypoints is the result of path planning (Manual in this project)
@@ -93,10 +95,38 @@ void trajGeneration(Eigen::MatrixXd path)
     _polyCoeff = trajectoryGeneratorWaypoint.PolyQPGeneration(_dev_order, path, vel, acc, _polyTime);
 
     ros::Time time_end = ros::Time::now();
-    ROS_WARN("Time consumed in trajectory generation is %f ms", (time_end - time_start).toSec() * 1000.0);
+    //ROS_WARN("Time consumed in trajectory generation is %f ms", (time_end - time_start).toSec() * 1000.0);
 
+    // publish time allocation
+    std_msgs::Float64MultiArray time_alloc, poly_coeff;
+    std_msgs::MultiArrayDimension timeArrayDimension, coeffArrayDimension;
+    timeArrayDimension.size = _polyTime.size();
+    time_alloc.layout.dim.push_back(timeArrayDimension);
+    for(int i = 0; i < _polyTime.size(); i++){
+      time_alloc.data.push_back(_polyTime(i));
+    }
+    _time_alloc_pub.publish(time_alloc);
+
+    // publish polynomial coefficients
+    coeffArrayDimension.label = "Segments";
+    coeffArrayDimension.size = _polyCoeff.rows();
+    coeffArrayDimension.stride = _polyCoeff.rows() * _polyCoeff.cols();
+    poly_coeff.layout.dim.push_back(coeffArrayDimension);
+    coeffArrayDimension.label = "Coefficients";
+    coeffArrayDimension.size = _polyCoeff.cols();
+    coeffArrayDimension.stride = _polyCoeff.cols();
+    poly_coeff.layout.dim.push_back(coeffArrayDimension);
+    for(int i = 0; i < _polyCoeff.rows(); i++){
+      for(int j = 0; j < _polyCoeff.cols(); j++){
+	poly_coeff.data.push_back(_polyCoeff(i,j));
+      }
+    }
+    _poly_coeff_pub.publish(poly_coeff);
+    
+    
     visWayPointPath(path);    // visulize path
     visWayPointTraj( _polyCoeff, _polyTime);    // visulize trajectory
+    //cerr<<endl<<_polyCoeff<<endl;
 }
 
 int main(int argc, char** argv)
@@ -117,6 +147,9 @@ int main(int argc, char** argv)
 
     _wp_traj_vis_pub = nh.advertise<visualization_msgs::Marker>("vis_trajectory", 1);
     _wp_path_vis_pub = nh.advertise<visualization_msgs::Marker>("vis_waypoint_path", 1);
+    _poly_coeff_pub  = nh.advertise<std_msgs::Float64MultiArray>("poly_coeff", 1);
+    _time_alloc_pub  = nh.advertise<std_msgs::Float64MultiArray>("time_alloc", 1);
+    
 
     ros::Rate rate(100);
     bool status = ros::ok();
@@ -134,7 +167,7 @@ void visWayPointTraj( MatrixXd polyCoeff, VectorXd time)
     visualization_msgs::Marker _traj_vis;
 
     _traj_vis.header.stamp       = ros::Time::now();
-    _traj_vis.header.frame_id    = "/map";
+    _traj_vis.header.frame_id    = "map";
 
     _traj_vis.ns = "traj_node/trajectory_waypoints";
     _traj_vis.id = 0;
@@ -178,7 +211,7 @@ void visWayPointTraj( MatrixXd polyCoeff, VectorXd time)
           pre = cur;
         }
     }
-    ROS_WARN("Trajectory length is %f m", traj_len);
+    //ROS_WARN("Trajectory length is %f m", traj_len);
     _wp_traj_vis_pub.publish(_traj_vis);
 }
 
@@ -186,7 +219,7 @@ void visWayPointPath(MatrixXd path)
 {
     visualization_msgs::Marker points, line_list;
     int id = 0;
-    points.header.frame_id    = line_list.header.frame_id    = "/map";
+    points.header.frame_id    = line_list.header.frame_id    = "map";
     points.header.stamp       = line_list.header.stamp       = ros::Time::now();
     points.ns                 = line_list.ns                 = "wp_point";
     points.action             = line_list.action             = visualization_msgs::Marker::ADD;
@@ -271,7 +304,7 @@ VectorXd timeAllocation( MatrixXd Path)
         double t2 = x2 / _Vel;
         time(i) = 2 * t1 + t2;
     }
-    // cout << time << endl;
+    //cout << time << endl;
 
     return time;
 }

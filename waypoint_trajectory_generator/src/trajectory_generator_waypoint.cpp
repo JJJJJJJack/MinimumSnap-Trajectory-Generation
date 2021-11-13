@@ -96,12 +96,12 @@ Eigen::MatrixXd TrajectoryGeneratorWaypoint::PolyQPGeneration(const int d_order,
     Px = closedFormCalCoeff1D(_Q, _M, _Ct, Path.col(0), StartState.col(0), EndState.col(0), seg_num, d_order);
     Py = closedFormCalCoeff1D(_Q, _M, _Ct, Path.col(1), StartState.col(1), EndState.col(1), seg_num, d_order);
     Pz = closedFormCalCoeff1D(_Q, _M, _Ct, Path.col(2), StartState.col(2), EndState.col(2), seg_num, d_order);
-    // cout << " Px = " << endl;
-    // cout << Px << endl;
-    // cout << " Py = " << endl;
-    // cout << Py << endl;
-    // cout << " Pz = " << endl;
-    // cout << Pz << endl;
+    //cout << " Px = " << endl;
+    //cout << Px << endl;
+    //cout << " Py = " << endl;
+    //cout << Py << endl;
+    //cout << " Pz = " << endl;
+    //cout << Pz << endl;
 
     for(int i = 0; i < seg_num; i++)
     {
