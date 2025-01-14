@@ -21,8 +21,24 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   nav_msgs
   quadrotor_msgs
+  message_generation
+  message_runtime
+  )
+
+add_message_files(
+  FILES
+  MinSnapWaypoint.msg
+  MinSnapWaypointList.msg
+  )
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  geometry_msgs
+  # Or other packages containing msgs
 )
-catkin_package()
+
+catkin_package(CATKIN_DEPENDS message_runtime)
 
 find_package(Eigen3 REQUIRED)
 set(Eigen3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})

@@ -99,9 +99,13 @@ Eigen::MatrixXd TrajectoryGeneratorWaypoint::PolyQPGeneration(const int d_order,
     // cout << " Ct = " << endl;
     // cout << _Ct << endl;
 
+    cout<<"Px:    "<<endl;
     Px = closedFormCalCoeff1D(_Q, _M, _Ct, Path.col(0), StartState.col(0), EndState.col(0), seg_num, d_order);
+    cout<<"Py:    "<<endl;
     Py = closedFormCalCoeff1D(_Q, _M, _Ct, Path.col(1), StartState.col(1), EndState.col(1), seg_num, d_order);
+    cout<<"Pz:    "<<endl;
     Pz = closedFormCalCoeff1D(_Q, _M, _Ct, Path.col(2), StartState.col(2), EndState.col(2), seg_num, d_order);
+    cout<<"Pyaw:    "<<endl;
     Pyaw = closedFormCalCoeff1D(_Q, _M, _Ct, Path.col(3), StartState.col(3), EndState.col(3), seg_num, d_order); 
     //cout << " Px = " << endl;
     //cout << Px << endl;
@@ -155,7 +159,7 @@ Eigen::MatrixXd TrajectoryGeneratorWaypoint::getM(const int p_num1d, const int d
     }
     // cout << "t_pow = " << endl;
     // cout << t_pow << endl;
-    // cout<<p_num1d<<endl;
+
     if(p_num1d == 6)        // minimum jerk
     {
         M_k << 1,     0   ,     0     ,     0     ,      0     ,      0     ,
@@ -175,18 +179,6 @@ Eigen::MatrixXd TrajectoryGeneratorWaypoint::getM(const int p_num1d, const int d
                0,     1   , 2*t_pow(1), 3*t_pow(2),  4*t_pow(3),  5*t_pow(4),  6*t_pow(5),  7*t_pow(6),
                0,     0   ,     2     , 6*t_pow(1), 12*t_pow(2), 20*t_pow(3), 30*t_pow(4), 42*t_pow(5),
                0,     0   ,     0     ,     6     , 24*t_pow(1), 60*t_pow(2),120*t_pow(3),210*t_pow(4);
-    }else if(p_num1d == 10)   // minimum Crackle
-    {
-        M_k << 1,     0   ,     0     ,     0     ,      0     ,      0     ,      0     ,      0     ,     0     ,       0     ,
-               0,     1   ,     0     ,     0     ,      0     ,      0     ,      0     ,      0     ,     0     ,       0     ,
-               0,     0   ,     2     ,     0     ,      0     ,      0     ,      0     ,      0     ,     0     ,       0     ,
-               0,     0   ,     0     ,     6     ,      0     ,      0     ,      0     ,      0     ,     0     ,       0     ,
-	       0,     0   ,     0     ,     0     ,      24    ,      0     ,      0     ,      0     ,     0     ,       0     ,
-               1, t_pow(1),   t_pow(2),   t_pow(3),    t_pow(4),    t_pow(5),    t_pow(6),    t_pow(7),     t_pow(8),     t_pow(9),
-               0,     1   , 2*t_pow(1), 3*t_pow(2),  4*t_pow(3),  5*t_pow(4),  6*t_pow(5),  7*t_pow(6),   8*t_pow(7),   9*t_pow(8),
-               0,     0   ,     2     , 6*t_pow(1), 12*t_pow(2), 20*t_pow(3), 30*t_pow(4), 42*t_pow(5),  56*t_pow(6),  72*t_pow(7),
-	       0,     0   ,     0     ,     6     , 24*t_pow(1), 60*t_pow(2),120*t_pow(3),210*t_pow(4), 336*t_pow(5), 504*t_pow(6),
-	       0,     0   ,     0     ,     0     ,      24    ,120*t_pow(1),360*t_pow(2),840*t_pow(3),1680*t_pow(4),3024*t_pow(5);
     }
     // cout << "M_k = " << endl;
     // cout << M_k << endl;
@@ -208,7 +200,7 @@ Eigen::MatrixXd TrajectoryGeneratorWaypoint::getCt(const int seg_num, const int 
     Ct.block(0, 0, d_order, d_order) = MatrixXd::Identity(d_order, d_order);
     // Ct for the last segment: pos,vel,acc,(jerk)
     Ct.block(d_num - d_order, df_num - d_order, d_order, d_order) = MatrixXd::Identity(d_order, d_order);
-    
+
     for(int mid_waypts_index = 0; mid_waypts_index < mid_waypts_num; mid_waypts_index++)
     {
         // Ct for middle waypoints: pos
@@ -223,17 +215,11 @@ Eigen::MatrixXd TrajectoryGeneratorWaypoint::getCt(const int seg_num, const int 
         Ct(d_order+2+2*d_order*mid_waypts_index, (df_num+1)+(d_order-1)*mid_waypts_index) = 1;
         Ct(d_order+(d_order+2+2*d_order*mid_waypts_index), (df_num+1)+(d_order-1)*mid_waypts_index) = 1;
 
-        if(d_order >= 4)  // minimum snap
+        if(d_order == 4)  // minimum snap
         {
             // Ct for middle waypoints: jerk
             Ct(d_order+3+2*d_order*mid_waypts_index, (df_num+2)+(d_order-1)*mid_waypts_index) = 1;
             Ct(d_order+(d_order+3+2*d_order*mid_waypts_index), (df_num+2)+(d_order-1)*mid_waypts_index) = 1;   
-        }
-	if(d_order == 5)  // minimum Crackle
-        {
-            // Ct for middle waypoints: jerk
-            Ct(d_order+4+2*d_order*mid_waypts_index, (df_num+3)+(d_order-1)*mid_waypts_index) = 1;
-            Ct(d_order+(d_order+4+2*d_order*mid_waypts_index), (df_num+3)+(d_order-1)*mid_waypts_index) = 1;   
         }
     }
     // cout << "Ct = " << endl;
@@ -273,8 +259,9 @@ Eigen::VectorXd TrajectoryGeneratorWaypoint::closedFormCalCoeff1D(const Eigen::M
     //cout << dF << endl;
     
     Eigen::VectorXd dP = -R_pp.inverse() * R_fp.transpose() * dF;   // closed-form solution of Unconstrained quadratic programming
-    //cout<<R_pp<<endl;
+
     
+
     Eigen::VectorXd dF_and_dP(df_and_dp_num);
     dF_and_dP << dF, dP;
     Eigen::VectorXd PolyCoeff1D = M_inv * Ct * dF_and_dP;   // all coefficients of one segment

@@ -14,6 +14,8 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <visualization_msgs/Marker.h>
 #include <quadrotor_msgs/PolynomialTrajectory.h>
+#include <waypoint_trajectory_generator/MinSnapWaypointList.h>
+#include <waypoint_trajectory_generator/MinSnapWaypoint.h>
 #include <sensor_msgs/Joy.h>
 #include <algorithm>
 
@@ -29,18 +31,18 @@ double _Vel, _Acc;
 int _dev_order, _min_order;
 
 // ros related
-ros::Subscriber _way_pts_sub;
+ros::Subscriber _way_pts_sub, _minsnap_way_pts_sub;
 ros::Publisher _wp_traj_vis_pub, _wp_path_vis_pub, _poly_coeff_pub, _time_alloc_pub;
 
 // for planning
 int _poly_num1D;
 MatrixXd _polyCoeff;
 VectorXd _polyTime;
-Vector3d _startPos  = Vector3d::Zero();
-Vector3d _startVel  = Vector3d::Zero();
-Vector3d _startAcc  = Vector3d::Zero();
-Vector3d _endVel    = Vector3d::Zero();
-Vector3d _endAcc    = Vector3d::Zero();
+VectorXd _startPos  = VectorXd::Zero(4);
+VectorXd _startVel  = VectorXd::Zero(4);
+VectorXd _startAcc  = VectorXd::Zero(4);
+VectorXd _endVel    = VectorXd::Zero(4);
+VectorXd _endAcc    = VectorXd::Zero(4);
 
 
 // declare
@@ -54,17 +56,48 @@ void rcvWaypointsCallBack(const nav_msgs::Path &wp);
 //Get the path points 
 void rcvWaypointsCallBack(const nav_msgs::Path & wp)
 {   
-    vector<Vector3d> wp_list;
+    vector<VectorXd> wp_list;
     wp_list.clear();
 
     for (int k = 0; k < (int)wp.poses.size(); k++)
     {
-        Vector3d pt( wp.poses[k].pose.position.x, wp.poses[k].pose.position.y, wp.poses[k].pose.position.z);
-        wp_list.push_back(pt);
-        //ROS_INFO("waypoint%d: (%f, %f, %f)", k+1, pt(0), pt(1), pt(2));
+      Quaterniond q(wp.poses[k].pose.orientation.w, wp.poses[k].pose.orientation.x, wp.poses[k].pose.orientation.y, wp.poses[k].pose.orientation.z);
+      auto euler = q.toRotationMatrix().eulerAngles(0, 1, 2);
+      VectorXd pt(4);
+      pt << wp.poses[k].pose.position.x, wp.poses[k].pose.position.y, wp.poses[k].pose.position.z, euler[2];
+      wp_list.push_back(pt);
+      //ROS_INFO("waypoint%d: (%f, %f, %f)", k+1, pt(0), pt(1), pt(2));
     }
 
-    MatrixXd waypoints(wp_list.size(), 3);  //add the original point
+    MatrixXd waypoints(wp_list.size(), 4);  //add the original point
+    //waypoints.row(0) = _startPos;
+
+    for(int k = 0; k < (int)wp_list.size(); k++)
+        waypoints.row(k) = wp_list[k];
+
+    //Trajectory generation: use minimum jerk/snap trajectory generation method
+    //waypoints is the result of path planning (Manual in this project)
+    trajGeneration(waypoints);
+}
+
+
+//Get the minsnap points 
+void rcvMinSnapWaypointsCallBack(const waypoint_trajectory_generator::MinSnapWaypointList & wp)
+{   
+    vector<VectorXd> wp_list;
+    wp_list.clear();
+
+    for (int k = 0; k < (int)wp.waypoint_list.size(); k++)
+    {
+      Quaterniond q(wp.waypoint_list[k].pose.orientation.w, wp.waypoint_list[k].pose.orientation.x, wp.waypoint_list[k].pose.orientation.y, wp.waypoint_list[k].pose.orientation.z);
+      auto euler = q.toRotationMatrix().eulerAngles(0, 1, 2);
+      VectorXd pt(4);
+      pt << wp.waypoint_list[k].pose.position.x, wp.waypoint_list[k].pose.position.y, wp.waypoint_list[k].pose.position.z, euler[2];
+      wp_list.push_back(pt);
+      //ROS_INFO("waypoint%d: (%f, %f, %f)", k+1, pt(0), pt(1), pt(2));
+    }
+
+    MatrixXd waypoints(wp_list.size(), 4);  //add the original point
     //waypoints.row(0) = _startPos;
 
     for(int k = 0; k < (int)wp_list.size(); k++)
@@ -81,8 +114,8 @@ void trajGeneration(Eigen::MatrixXd path)
 
     TrajectoryGeneratorWaypoint trajectoryGeneratorWaypoint;
     
-    MatrixXd vel  = MatrixXd::Zero(2, 3); 
-    MatrixXd acc  = MatrixXd::Zero(2, 3);
+    MatrixXd vel  = MatrixXd::Zero(2, 4); 
+    MatrixXd acc  = MatrixXd::Zero(2, 4);
     vel.row(0)  = _startVel;
     vel.row(1)  = _endVel;
     acc.row(0)  = _startAcc;
@@ -144,6 +177,7 @@ int main(int argc, char** argv)
     _poly_num1D = 2 * _dev_order;
 
     _way_pts_sub     = nh.subscribe( "waypoints", 1, rcvWaypointsCallBack );
+    //_minsnap_way_pts_sub     = nh.subscribe( "minsnap_waypoints", 1, rcvMinSnapWaypointsCallBack );
 
     _wp_traj_vis_pub = nh.advertise<visualization_msgs::Marker>("vis_trajectory", 1);
     _wp_path_vis_pub = nh.advertise<visualization_msgs::Marker>("vis_waypoint_path", 1);
